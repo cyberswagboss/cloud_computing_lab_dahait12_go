@@ -11,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+// add parametrization and fix db
 func connectToDb() *sql.DB {
 	db, err := sql.Open("mysql", "go_user:go_pwd@tcp(localhost:3306)/tododb")
 	if err != nil {
