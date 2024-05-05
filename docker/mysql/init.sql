@@ -1,0 +1,9 @@
+CREATE DATABASE IF NOT EXISTS tododb;
+USE tododb;
+
+CREATE TABLE IF NOT EXISTS todos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    task VARCHAR(255) NOT NULL
+);
+
+INSERT INTO todos (task) VALUES ('Run the Database!');
