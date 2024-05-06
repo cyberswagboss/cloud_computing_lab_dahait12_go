@@ -6,14 +6,24 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// add parametrization and fix db
+const todoPrefix = "/test/"
+
 func connectToDb() *sql.DB {
-	db, err := sql.Open("mysql", "go_user:go_pwd@tcp(localhost:3306)/tododb")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
+
+	databseParams := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
+	db, err := sql.Open("mysql", databseParams)
 	if err != nil {
 		panic(err)
 		os.Exit(1)
@@ -67,7 +77,7 @@ func addTodo(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		todo := request.URL.Query().Get("todo")
+		todo := strings.Trim(request.URL.Path, todoPrefix)
 
 		if todo == "" {
 			http.Error(writer, "Missing todo parameter", http.StatusBadRequest)
@@ -90,14 +100,21 @@ func removeTodo(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		todo := request.URL.Query().Get("todo")
+		const todoPrefix = "/todos/"
+		todo := strings.TrimPrefix(request.URL.Path, todoPrefix)
 
-		if todo == "" {
+		if todo == "" || todo == "/" {
 			http.Error(writer, "Missing todo parameter", http.StatusBadRequest)
 			return
 		}
 
-		_, err := db.Exec("DELETE FROM todos WHERE task = ?", todo)
+		decodedTodo, err := url.QueryUnescape(todo)
+		if err != nil {
+			http.Error(writer, "Invalid todo parameter", http.StatusBadRequest)
+			return
+		}
+
+		_, err = db.Exec("DELETE FROM todos WHERE task = ?", decodedTodo)
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return
