@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,17 +14,26 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const todoPrefix = "/test/"
+const todoPrefix = "/todos/"
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
+}
 
 func connectToDb() *sql.DB {
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbName := os.Getenv("DB_NAME")
+	dbUser := flag.String("db_user", getEnv("DB_USER", "go_user"), "Database user")
+	dbPassword := flag.String("db_password", getEnv("DB_PASSWORD", "go_pwd"), "Database password")
+	dbHost := flag.String("db_host", getEnv("DB_HOST", "mysql"), "Database host")
+	dbPort := flag.String("db_port", getEnv("DB_PORT", "3306"), "Database port")
+	dbName := flag.String("db_name", getEnv("DB_NAME", "tododb"), "Database name")
 
-	databseParams := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
-	db, err := sql.Open("mysql", databseParams)
+	flag.Parse()
+
+	databaseParams := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", *dbUser, *dbPassword, *dbHost, *dbPort, *dbName)
+	db, err := sql.Open("mysql", databaseParams)
 	if err != nil {
 		panic(err)
 		os.Exit(1)
@@ -49,7 +59,6 @@ func getTodos(db *sql.DB) http.HandlerFunc {
 
 		var todos []string
 		rows, err := db.Query("SELECT task FROM todos")
-
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return
@@ -65,9 +74,9 @@ func getTodos(db *sql.DB) http.HandlerFunc {
 			todos = append(todos, task)
 		}
 
+		writer.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(writer).Encode(todos)
 	}
-
 }
 
 func addTodo(db *sql.DB) http.HandlerFunc {
@@ -77,14 +86,19 @@ func addTodo(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		todo := strings.Trim(request.URL.Path, todoPrefix)
+		todo := strings.TrimPrefix(request.URL.Path, todoPrefix)
+		decodedTodo, err := url.PathUnescape(todo)
+		if err != nil {
+			http.Error(writer, "Invalid todo parameter", http.StatusBadRequest)
+			return
+		}
 
-		if todo == "" {
+		if decodedTodo == "" {
 			http.Error(writer, "Missing todo parameter", http.StatusBadRequest)
 			return
 		}
 
-		_, err := db.Exec("INSERT INTO todos (task) values (?)", todo)
+		_, err = db.Exec("INSERT INTO todos (task) values (?)", decodedTodo)
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return
@@ -100,9 +114,7 @@ func removeTodo(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		const todoPrefix = "/todos/"
 		todo := strings.TrimPrefix(request.URL.Path, todoPrefix)
-
 		if todo == "" || todo == "/" {
 			http.Error(writer, "Missing todo parameter", http.StatusBadRequest)
 			return
@@ -123,14 +135,11 @@ func removeTodo(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func main() {
-	db := connectToDb()
-	defer db.Close()
-
-	http.HandleFunc("/todos", getTodos(db))
-	http.HandleFunc("/todos/", getTodos(db))
-	http.HandleFunc("/todos/{todo}", func(writer http.ResponseWriter, request *http.Request) {
+func handleTodos(db *sql.DB) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
 		switch request.Method {
+		case "GET":
+			getTodos(db)(writer, request)
 		case "POST":
 			addTodo(db)(writer, request)
 		case "DELETE":
@@ -138,7 +147,15 @@ func main() {
 		default:
 			http.Error(writer, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}
+}
+
+func main() {
+	db := connectToDb()
+	defer db.Close()
+
+	http.HandleFunc("/todos", handleTodos(db))
+	http.HandleFunc("/todos/", handleTodos(db))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

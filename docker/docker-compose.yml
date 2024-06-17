@@ -1,21 +1,6 @@
 version: '3.1'
 
 services:
-  web:
-    build: 
-      context:  ../
-      dockerfile: docker/Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      DB_USER: go_user
-      DB_PASSWORD: go_pwd
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: tododb
-      SERVER_PORT: 8080
-    depends_on:
-      - mysql
   mysql:
     image: mysql:latest
     restart: always
@@ -29,6 +14,41 @@ services:
     volumes:
       - dbdata:/var/lib/mysql
       - "./mysql/init.sql:/docker-entrypoint-initdb.d/1.sql"
+    networks: 
+      - todonet
+
+  backend:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DB_USER: go_user
+      DB_PASSWORD: go_pwd
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: tododb
+      SERVER_PORT: 8080
+    depends_on:
+      - mysql
+    networks: 
+      - todonet
+
+  todoui-thymeleaf:
+    image: maeddes/todoui-thymeleaf:hse24
+    networks:
+      - todonet
+    ports:
+      - "8090:8090"
+    environment:
+      - BACKEND_URL=http://backend:8080/
+    extra_hosts: 
+      - "localhost:127.0.0.1"
 
 volumes:
   dbdata:
+
+
+networks:
+  todonet:
