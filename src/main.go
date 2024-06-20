@@ -114,13 +114,14 @@ func removeTodo(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		todo := strings.TrimPrefix(request.URL.Path, todoPrefix)
-		if todo == "" || todo == "/" {
+		path := strings.TrimPrefix(request.URL.Path, todoPrefix)
+		parts := strings.SplitN(path, "/", 2)
+		if len(parts) < 1 || parts[0] == "" {
 			http.Error(writer, "Missing todo parameter", http.StatusBadRequest)
 			return
 		}
 
-		decodedTodo, err := url.QueryUnescape(todo)
+		decodedTodo, err := url.PathUnescape(parts[0])
 		if err != nil {
 			http.Error(writer, "Invalid todo parameter", http.StatusBadRequest)
 			return

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: cyberswagboss/docker-backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_USER
+          value: "go_user"
+        - name: DB_PASSWORD
+          value: "go_pwd"
+        - name: DB_HOST
+          value: "mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_NAME
+          value: "tododb"
+        - name: SERVER_PORT
+          value: "8080"
